@@ -15,6 +15,8 @@ args = argparser.parse_args()
 inhandle = open(args.input,'r')
 outhandle = open(args.output,'w')
 
+lt1 = 1. - np.finfo(np.float64).epsneg
+
 def GP_lambda_likelihood(counts):
     # compute inputs to likelihood function
     (nx,x) = np.histogram(counts,bins=range(max(counts)+2))
@@ -25,33 +27,9 @@ def GP_lambda_likelihood(counts):
     # check condition for unique root
     if sum(nx[2:]*x[2:]*(x[2:]-1)) - n*(x_bar**2) <= 0:
         sys.stderr.write("Condition for uniqueness of lambda is not met.\n    x: %s\n    n: %s\n    x_bar: %s\n" % (x,n,x_bar)); sys.stderr.flush()
+        raise ValueError
     
     return lambda lam: sum(nx*(x*(x-1)/(x_bar+(x-x_bar)*lam))) - n*x_bar
-
-#################################################
-
-# DEPRECATED
-def GP_pmf(x,theta,lambd):
-    log = np.log
-    logP = log(theta) + (x-1)*log(theta+x*lambd) - (theta+x*lambd) - np.sum(log(np.arange(1,x+1)))
-    return np.exp(logP)
-
-# DEPRECATED
-def GP_cdf(x,theta,lambd):
-    return np.sum([GP_pmf(y,theta,lambd) for y in np.arange(x+1)])
-
-# DEPRECATED
-def GP_sf(x,theta,lambd):
-    return reduce(lambda x,y: x-y, [1]+[GP_pmf(y,theta,lambd) for y in np.arange(x+1)])
-
-# DEPRECATED
-def GP_cdf_parallel(x,theta,lambd):
-    log = np.log
-    y = np.arange(x+1)
-    logPxs = log(theta) + (y-1)*log(theta+y*lambd) - (theta+y*lambd) - np.sum(np.log((np.tri(x+1) * np.arange(x+1) + np.tri(x+1,k=-1).transpose())[:,1:]),axis=1)
-    return np.sum(np.exp(logPxs))
-
-#################################################
 
 def log_GP_pmf(x,theta,lambd):
     log = np.log
@@ -87,7 +65,7 @@ for line in inhandle:
     output_counts.append( np.int_(data[2:]) )
 
 input_counts = np.asarray(input_counts)
-output_counts = np.asarray(output_counts)
+output_counts = np.asarray(output_counts) + 1   # pseudocounts to combat negative regressed theta
 uniq_input_values = list(set(input_counts))
 sys.stderr.write("Num clones: %s\nInput vec shape: %s\nOutput array shape: %s\n" % (len(clones),input_counts.shape,output_counts.shape)); sys.stderr.flush()
 
@@ -103,14 +81,19 @@ for i in xrange(output_counts.shape[1]):    # for each output column...
     idxs.append([])
     for input_value in uniq_input_values:   # ...compute lambdas/thetas
         # compute lambda
-        curr_counts = output_counts[np.logical_and(input_counts == input_value,output_counts[:,i] > 1),i]
+        curr_counts = output_counts[input_counts == input_value,i]
         if len(curr_counts) < 50:
             continue
+        
+        try:    # may fail if MLE doesn't meet uniqueness condition
+            H = GP_lambda_likelihood(curr_counts)
+        except ValueError:
+            continue
+        
         idxs[-1].append(input_value)
-        H = GP_lambda_likelihood(curr_counts)
-        lambd = sp.optimize.fsolve(H,0.5)[0]
+        lambd = sp.optimize.brentq(H, 0., lt1)
         lambdas[-1].append( lambd )
-    
+        
         # compute theta
         n = len(curr_counts)
         x_bar = sum(curr_counts) / float(n)
