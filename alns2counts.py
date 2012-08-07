@@ -39,7 +39,7 @@ for infilename in glob.glob(os.path.join(input_dir,'*.aln')):
 with open(output_file,'w') as op:
     print >>op, '# ' + ','.join(["ref_clone","ref_input"]+samples)  # header line
     for (ref_clone,ref_count) in zip(reference_names,reference_counts):
-        record = ['ref_clone',str(ref_count)]
+        record = [ref_clone,str(ref_count)]
         for sample in samples:
             record.append(str(counts[sample].get(ref_clone,0)))
         print >>op, ','.join(record)
