@@ -23,7 +23,7 @@ def submit_to_SGE(queue,log_file,cmd_to_submit,mem_usage=None):
     cmd_to_submit = r'"%s"' % cmd_to_submit.strip(r'"')
     SGE_params = {'log_output':log_file,
                       'queue':queue}
-    SGE_cmd = 'qsub -o %(log_output)s -b y -V -j y -cwd -q %(queue)s -N bowtie_parts' % SGE_params
+    SGE_cmd = 'qsub -o %(log_output)s -m e -b y -V -j y -cwd -q %(queue)s -N bowtie_parts' % SGE_params
     if mem_usage != None:
         SGE_cmd += r' -l h_vmem=%dG' % mem_usage
     cmd = ' '.join([SGE_cmd,cmd_to_submit])
